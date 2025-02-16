@@ -1,0 +1,10 @@
+# Ignorar el entorno virtual
+agente/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Configuraciones de VS Code (opcional)
+.vscode/
