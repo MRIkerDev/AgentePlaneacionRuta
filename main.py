@@ -1,94 +1,181 @@
 import pygame
 import time
-from astar import astar
+import matplotlib.pyplot as plt
+from qlearning import QLearningAgent  
 from entorno import Environment
-from visual import visualize_path  # Importamos la función de Matplotlib
+from visual import visualize_path  
 
 # Inicializar Pygame
 pygame.init()
 
 # Configuración de la ventana
-WIDTH, HEIGHT = 500, 500  # Tamaño de la ventana
-GRID_SIZE = 10  # Tamaño de la cuadrícula
-CELL_SIZE = WIDTH // GRID_SIZE  # Tamaño de cada celda
+WIDTH, HEIGHT = 500, 500  
+GRID_SIZE = 10  
+CELL_SIZE = WIDTH // GRID_SIZE  
 
 # Colores
-WHITE = (255, 255, 255)  # Camino libre
-BLACK = (0, 0, 0)  # Obstáculos
-GREEN = (0, 255, 0)  # Camino recorrido
-BLUE = (0, 0, 255)  # Inicio
-RED = (255, 0, 0)  # Destino
-ORANGE = (255, 165, 0)  # Agente en movimiento
+WHITE = (255, 255, 255)  
+BLACK = (0, 0, 0)  
+GREEN = (0, 255, 0)  
+BLUE = (0, 0, 255)  
+RED = (255, 0, 0)  
+ORANGE = (255, 165, 0)  
 
-# Crear entorno
+# Parámetros de simulación
+MAX_INTENTOS = 200  
+MAX_PASOS_POR_INTENTO = 150  
+EPISODIOS_ENTRENAMIENTO = 350  
+
+# Crear entorno y agente
 env = Environment(rows=GRID_SIZE, cols=GRID_SIZE, obstacle_chance=0)
 start, goal = (0, 0), (GRID_SIZE - 1, GRID_SIZE - 1)
+agent = QLearningAgent(GRID_SIZE, GRID_SIZE)
+
+# Agregar atributo de recompensa al agente
+agent.recompensa_total = 0  
+
+# Almacena los pasos por episodio para graficar
+steps_per_episode = []
+best_attempt = None  
+best_attempt_steps = float("inf")  
+attempts = []  # Almacenar los intentos exitosos
 
 # Crear ventana
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Simulación A* - Animación Paso a Paso")
+pygame.display.set_caption("Simulación Q-Learning - Selección de Obstáculos")
 
-# Posición inicial del agente
-agent_pos = list(start)
-visited_nodes = []  # Lista para pintar el camino recorrido
-
-# Variables para controlar la edición de obstáculos
+# Variables de control
 editing_obstacles = True
-
-# Bucle principal
+training = False
 running = True
-path_index = 0  # Índice para recorrer el camino paso a paso
+waiting_for_training = True
+episodes_completed = False
 
-while running:
-    screen.fill(WHITE)  # Fondo blanco
-
-    # Dibujar cuadrícula y obstáculos
+def draw_grid():
+    screen.fill(WHITE)  
     for y in range(GRID_SIZE):
         for x in range(GRID_SIZE):
-            color = WHITE if env.grid[y][x] == 0 else BLACK  # Blanco = libre, Negro = obstáculo
+            color = WHITE if env.grid[y][x] == 0 else BLACK  
             pygame.draw.rect(screen, color, (x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
-    # Dibujar punto de inicio y fin
-    pygame.draw.rect(screen, BLUE, (start[1] * CELL_SIZE, start[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))  # Inicio
-    pygame.draw.rect(screen, RED, (goal[1] * CELL_SIZE, goal[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))  # Fin
+    pygame.draw.rect(screen, BLUE, (start[1] * CELL_SIZE, start[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+    pygame.draw.rect(screen, RED, (goal[1] * CELL_SIZE, goal[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
 
-    # Dibujar el camino recorrido hasta el momento
-    for node in visited_nodes:
-        pygame.draw.rect(screen, GREEN, (node[1] * CELL_SIZE, node[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+    pygame.display.flip()  
 
-    # Mover al agente paso a paso
-    if not editing_obstacles and path and path_index < len(path):
-        agent_pos = path[path_index]  # Obtener la siguiente posición en el camino
-        visited_nodes.append(agent_pos)  # Guardar la posición para pintarla en verde
-        pygame.draw.rect(screen, ORANGE, (agent_pos[1] * CELL_SIZE, agent_pos[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))  # Agente en movimiento
-        path_index += 1  # Avanzar en el camino
-    elif not editing_obstacles:
-        running = False  # Detener el bucle cuando termine el recorrido
+def manejar_eventos():
+    global running, editing_obstacles, training, waiting_for_training
 
-    # Manejo de eventos
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
         elif event.type == pygame.MOUSEBUTTONDOWN and editing_obstacles:
-            # Obtener la posición del clic
             mouse_x, mouse_y = event.pos
             grid_x, grid_y = mouse_x // CELL_SIZE, mouse_y // CELL_SIZE
-            # Verificar que los índices estén dentro de los límites de la cuadrícula
             if 0 <= grid_x < GRID_SIZE and 0 <= grid_y < GRID_SIZE:
-                # Alternar el estado del obstáculo en la celda clicada
-                env.grid[grid_y][grid_x] = 1 - env.grid[grid_y][grid_x]
+                env.grid[grid_y][grid_x] = 1 - env.grid[grid_y][grid_x]  
+                draw_grid()  
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN:
-                # Finalizar la edición de obstáculos y calcular el camino
-                editing_obstacles = False
-                path = astar(env.grid, start, goal)
+            if event.key == pygame.K_RETURN and editing_obstacles:
+                editing_obstacles = False  
+                waiting_for_training = True
+            elif event.key == pygame.K_t and waiting_for_training:
+                training = True
+                waiting_for_training = False
 
-    pygame.display.flip()  # Actualizar pantalla
-    if not editing_obstacles:
-        time.sleep(0.3)  # Controlar la velocidad de animación
+# Bucle principal
+while running:
+    screen.fill(WHITE)
+    manejar_eventos()
+
+    # Dibujar cuadrícula y obstáculos
+    draw_grid()
+
+    # Esperar confirmación para entrenar
+    if waiting_for_training:
+        font = pygame.font.SysFont(None, 30)
+        text = font.render("Presiona T para entrenar", True, (0, 0, 0))
+        screen.blit(text, (10, 10))
+
+    # Entrenamiento de Q-learning
+    if training:
+        for episodio in range(EPISODIOS_ENTRENAMIENTO):
+            estado = start
+            pasos = 0
+            path = [estado]
+            estados_visitados = set()
+
+            while estado != goal and pasos < MAX_PASOS_POR_INTENTO:
+                manejar_eventos()
+                if not running:
+                    break
+
+                estados_visitados.add(estado)
+                accion = agent.elegir_accion(estado)
+                nuevo_estado = agent.mover(estado, accion, env)
+
+                recompensa = -1  # Penalización por movimiento
+                if nuevo_estado == goal:
+                    recompensa = 100  
+                    agent.recompensa_total += 10  
+                elif env.grid[nuevo_estado[0]][nuevo_estado[1]] == 1:
+                    recompensa = -10  
+                    nuevo_estado = estado  
+                elif nuevo_estado in estados_visitados:
+                    recompensa -= 5  
+
+                agent.actualizar_Q(estado, accion, recompensa, nuevo_estado, estados_visitados)
+                estado = nuevo_estado
+                path.append(estado)
+                pasos += 1
+
+                # Dibujar entrenamiento en tiempo real
+                screen.fill(WHITE)
+                draw_grid()
+                for node in path:
+                    pygame.draw.rect(screen, GREEN, (node[1] * CELL_SIZE, node[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+
+                pygame.draw.rect(screen, ORANGE, (estado[1] * CELL_SIZE, estado[0] * CELL_SIZE, CELL_SIZE, CELL_SIZE))
+                pygame.display.flip()
+                time.sleep(0.001)
+
+            if not running:
+                break
+
+            steps_per_episode.append(pasos)
+            agent.reducir_epsilon()
+
+            # ✅ Actualizar el mejor intento en tiempo real
+            if estado == goal:
+                attempts.append(path)  
+                if pasos < best_attempt_steps:
+                    best_attempt_steps = pasos
+                    best_attempt = path
+
+            print(f"✅ Episodio {episodio+1}: {pasos} pasos | Mejor intento hasta ahora: {best_attempt_steps} pasos | Recompensa acumulada: {agent.recompensa_total}")
+
+        training = False
+        episodes_completed = True
+
+    pygame.display.flip()
+
+# 🟢 Graficar la curva de aprendizaje
+plt.plot(range(1, len(steps_per_episode) + 1), steps_per_episode, marker='o', linestyle='-')
+plt.xlabel("Episodio (Intento)")
+plt.ylabel("Número de pasos")
+plt.title("Evolución del Aprendizaje")
+plt.grid(True)
+plt.show()
 
 pygame.quit()
 
-# 📌 Llamar a Matplotlib después de cerrar Pygame
-if path:
-    visualize_path(env.grid, path, start, goal)  # Mostrar el mapa en Matplotlib
+# 📌 Mostrar los 5 mejores caminos en Matplotlib
+successful_attempts = [attempt for attempt in attempts if attempt[-1] == goal]
+best_attempts = sorted(successful_attempts, key=len)[:5]  
+
+if best_attempts:
+    print(f"✅ Se encontraron {len(best_attempts)} mejores caminos después de {EPISODIOS_ENTRENAMIENTO} episodios.")
+    for i, attempt in enumerate(best_attempts):
+        visualize_path(env.grid, attempt, start, goal)  
+else:
+    print("Ningún camino llegó a la meta.")
