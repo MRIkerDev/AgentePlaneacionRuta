@@ -12,9 +12,8 @@ class QLearningAgent:
         self.epsilon_decay = epsilon_decay  # Reducción de epsilon por episodio
         self.min_epsilon = min_epsilon  # Límite mínimo de epsilon
         self.max_repeticiones = max_repeticiones  # Número máximo de veces que puede visitar un estado
-        self.penalizacion_estado_repetido = -5  # 🔥 Penalización por repetir estados
+        self.penalizacion_estado_repetido = -5  #Penalización por repetir estados
 
-        # Inicializar Q-table (si no se carga una existente)
         self.q_table = q_table_cargada if q_table_cargada else {}
 
     def inicializar_estado(self, estado):
@@ -42,11 +41,12 @@ class QLearningAgent:
             return (nx, ny)  # Movimiento válido
         return estado  # Si el movimiento es inválido, se queda en el mismo lugar
 
+
     def actualizar_Q(self, estado, accion, recompensa, nuevo_estado, estados_visitados):
         """Actualiza la tabla Q con la ecuación de aprendizaje Q-learning."""
         self.inicializar_estado(nuevo_estado)
 
-        # 🔥 Aplicar penalización si el agente repite estados muchas veces
+        # Aplicar penalización si el agente repite estados muchas veces
         if nuevo_estado in estados_visitados:
             recompensa += self.penalizacion_estado_repetido  
 

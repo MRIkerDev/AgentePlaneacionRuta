@@ -5,15 +5,14 @@ from qlearning import QLearningAgent
 from entorno import Environment
 from visual import visualize_path  
 
-# Inicializar Pygame
 pygame.init()
 
-# Configuración de la ventana
+# ventana
 WIDTH, HEIGHT = 500, 500  
-GRID_SIZE = 10  
+GRID_SIZE = 10
 CELL_SIZE = WIDTH // GRID_SIZE  
 
-# Colores
+# colores a utilizar
 WHITE = (255, 255, 255)  
 BLACK = (0, 0, 0)  
 GREEN = (0, 255, 0)  
@@ -21,30 +20,27 @@ BLUE = (0, 0, 255)
 RED = (255, 0, 0)  
 ORANGE = (255, 165, 0)  
 
-# Parámetros de simulación
-MAX_INTENTOS = 200  
-MAX_PASOS_POR_INTENTO = 150  
+MAX_PASOS_POR_INTENTO = 180
 EPISODIOS_ENTRENAMIENTO = 350  
 
-# Crear entorno y agente
+
 env = Environment(rows=GRID_SIZE, cols=GRID_SIZE, obstacle_chance=0)
-start, goal = (0, 0), (GRID_SIZE - 1, GRID_SIZE - 1)
+start, goal = (0, 0), (GRID_SIZE-1, GRID_SIZE-1)
 agent = QLearningAgent(GRID_SIZE, GRID_SIZE)
 
-# Agregar atributo de recompensa al agente
+
 agent.recompensa_total = 0  
 
-# Almacena los pasos por episodio para graficar
+
 steps_per_episode = []
 best_attempt = None  
 best_attempt_steps = float("inf")  
-attempts = []  # Almacenar los intentos exitosos
+attempts = []  
 
-# Crear ventana
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Simulación Q-Learning - Selección de Obstáculos")
 
-# Variables de control
+
 editing_obstacles = True
 training = False
 running = True
@@ -83,21 +79,20 @@ def manejar_eventos():
                 training = True
                 waiting_for_training = False
 
-# Bucle principal
+
 while running:
     screen.fill(WHITE)
     manejar_eventos()
 
-    # Dibujar cuadrícula y obstáculos
+  
     draw_grid()
 
-    # Esperar confirmación para entrenar
+ 
     if waiting_for_training:
         font = pygame.font.SysFont(None, 30)
         text = font.render("Presiona T para entrenar", True, (0, 0, 0))
         screen.blit(text, (10, 10))
 
-    # Entrenamiento de Q-learning
     if training:
         for episodio in range(EPISODIOS_ENTRENAMIENTO):
             estado = start
@@ -114,7 +109,7 @@ while running:
                 accion = agent.elegir_accion(estado)
                 nuevo_estado = agent.mover(estado, accion, env)
 
-                recompensa = -1  # Penalización por movimiento
+                recompensa = -1  
                 if nuevo_estado == goal:
                     recompensa = 100  
                     agent.recompensa_total += 10  
@@ -129,7 +124,7 @@ while running:
                 path.append(estado)
                 pasos += 1
 
-                # Dibujar entrenamiento en tiempo real
+                #se dibuja el recorrido 
                 screen.fill(WHITE)
                 draw_grid()
                 for node in path:
@@ -145,21 +140,20 @@ while running:
             steps_per_episode.append(pasos)
             agent.reducir_epsilon()
 
-            # ✅ Actualizar el mejor intento en tiempo real
+            # se actualiza el mejor intento
             if estado == goal:
                 attempts.append(path)  
                 if pasos < best_attempt_steps:
                     best_attempt_steps = pasos
                     best_attempt = path
 
-            print(f"✅ Episodio {episodio+1}: {pasos} pasos | Mejor intento hasta ahora: {best_attempt_steps} pasos | Recompensa acumulada: {agent.recompensa_total}")
+            print(f"Episodio {episodio+1}: {pasos} pasos | Mejor intento hasta ahora: {best_attempt_steps} pasos | Recompensa acumulada: {agent.recompensa_total}")
 
         training = False
         episodes_completed = True
 
     pygame.display.flip()
 
-# 🟢 Graficar la curva de aprendizaje
 plt.plot(range(1, len(steps_per_episode) + 1), steps_per_episode, marker='o', linestyle='-')
 plt.xlabel("Episodio (Intento)")
 plt.ylabel("Número de pasos")
@@ -169,12 +163,12 @@ plt.show()
 
 pygame.quit()
 
-# 📌 Mostrar los 5 mejores caminos en Matplotlib
+
 successful_attempts = [attempt for attempt in attempts if attempt[-1] == goal]
 best_attempts = sorted(successful_attempts, key=len)[:5]  
 
 if best_attempts:
-    print(f"✅ Se encontraron {len(best_attempts)} mejores caminos después de {EPISODIOS_ENTRENAMIENTO} episodios.")
+    print(f"Se encontraron {len(best_attempts)} mejores caminos después de {EPISODIOS_ENTRENAMIENTO} episodios.")
     for i, attempt in enumerate(best_attempts):
         visualize_path(env.grid, attempt, start, goal)  
 else:
